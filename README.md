@@ -14,7 +14,7 @@ Ruleta de escritorio para sortear opciones. Funciona sin internet.
 
 ## Usarla
 
-Descargá el `.zip` de la última versión en [Releases](../../releases), descomprimilo y abrí `Ruleta.exe`. No hace falta instalar nada.
+Descargá `Ruleta.exe` de la última versión en [Releases](../../releases) y abrilo. Es un único archivo: no hace falta instalar nada ni tener internet. La primera vez puede tardar unos segundos en abrir.
 
 ## Desarrollo
 
@@ -23,7 +23,7 @@ Requiere [Node.js](https://nodejs.org).
 ```bash
 npm install
 npm start        # abre la app
-npm run build    # genera dist/Ruleta-win32-x64/Ruleta.exe
+npm run build    # genera dist/Ruleta.exe (un único ejecutable portable)
 ```
 
 Toda la app está en `index.html`; `main.js` solo abre la ventana de Electron.
