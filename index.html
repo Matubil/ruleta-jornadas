@@ -75,7 +75,6 @@
   .secBody { padding: 8px 12px 10px; }
   .optrow { display: flex; align-items: center; gap: 8px; padding: 9px 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
   .optrow input { width: 17px; height: 17px; cursor: pointer; }
-  #removedNote { color: var(--muted); font-size: 13px; margin-right: auto; align-self: center; }
   #sWinnerMode { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font: 14px "Segoe UI", sans-serif; background: #fff; cursor: pointer; }
   .row { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 14px; }
   .row label { flex: 1; }
@@ -262,7 +261,6 @@
     <div id="modalHead">¡Tenemos un ganador!</div>
     <div id="modalBody"></div>
     <div id="modalFoot">
-      <span id="removedNote"></span>
       <button class="btn" id="keepWinner">No eliminar</button>
       <button class="btn primary" id="removeWinner" style="background:#c62828">Eliminar</button>
       <button class="btn primary" id="closeModal">Cerrar</button>
@@ -568,7 +566,6 @@ function finish(i) {
   $('removeWinner').style.display = ask ? '' : 'none';
   $('keepWinner').style.display = ask ? '' : 'none';
   $('closeModal').style.display = ask ? 'none' : '';
-  $('removedNote').textContent = mode === 'remove' ? 'Se eliminó de la ruleta' : mode === 'keep' ? 'Sigue en la ruleta' : '';
   $('overlay').classList.add('show');
   (ask ? $('keepWinner') : $('closeModal')).focus();
 }
