@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<title>Ruleta</title>
+<style>
+  :root {
+    --panel-bg: rgba(255,255,255,0.94);
+    --panel-text: #222;
+    --muted: #666;
+    --accent: #3b6fd8;
+    --border: #d5d8de;
+    --btn-bg: #eceef2;
+    --btn-hover: #dfe2e8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; }
+  body { background: #1d1f2b center / cover no-repeat; color: var(--panel-text); user-select: none; }
+
+  #stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding-right: 380px; transition: padding .25s; }
+  body.panel-hidden #stage { padding-right: 0; }
+  #wheelWrap { position: relative; }
+  #wheel { display: block; cursor: pointer; }
+  #title { position: absolute; top: 14px; left: 0; right: 380px; text-align: center; font-size: 30px; font-weight: 700; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.6); pointer-events: none; }
+  body.panel-hidden #title { right: 0; }
+  #hint { position: absolute; bottom: 14px; left: 0; right: 380px; text-align: center; color: rgba(255,255,255,.8); font-size: 13px; text-shadow: 0 1px 4px rgba(0,0,0,.7); pointer-events: none; }
+  body.panel-hidden #hint { right: 0; }
+
+  /* Panel */
+  #panel { position: absolute; top: 16px; right: 16px; bottom: 16px; width: 350px; display: flex; flex-direction: column; gap: 8px; transition: transform .25s, opacity .25s; }
+  body.panel-hidden #panel { transform: translateX(380px); opacity: 0; pointer-events: none; }
+  .card { background: var(--panel-bg); border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.25); }
+  #tabs { display: flex; padding: 4px; }
+  .tab { flex: 1; border: 0; background: none; padding: 7px 4px; cursor: pointer; border-bottom: 2px solid transparent; position: relative; color: #333; font-size: 13px; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 5px; }
+  .tab.active { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .tab svg { width: 18px; height: 18px; }
+  .badge { background: #3d4a5c; color: #fff; border-radius: 9px; font-size: 10px; padding: 1px 5px; min-width: 16px; }
+  .badge:empty { display: none; }
+  .view { display: none; flex: 1; min-height: 0; flex-direction: column; gap: 8px; }
+  .view.active { display: flex; }
+
+  .toolbar { display: flex; gap: 6px; padding: 6px; flex-wrap: wrap; }
+  .btn { border: 0; background: var(--btn-bg); border-radius: 6px; padding: 7px 10px; cursor: pointer; font-size: 13px; font-family: inherit; color: #222; display: inline-flex; align-items: center; gap: 5px; }
+  .btn:hover { background: var(--btn-hover); }
+  .btn svg { width: 16px; height: 16px; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.danger { color: #b3261e; }
+  .spacer { flex: 1; }
+
+  #entries { flex: 1; min-height: 0; width: 100%; resize: none; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font: 15px/1.6 "Segoe UI", sans-serif; background: var(--panel-bg); color: #222; outline: none; user-select: text; }
+  #entries:focus { border-color: var(--accent); }
+  .counter { align-self: flex-end; background: #3b5d8f; color: #fff; border-radius: 12px; padding: 2px 10px; font-size: 12px; }
+
+  #results { flex: 1; overflow: auto; padding: 6px 10px; margin: 0; list-style: none; }
+  #results li { display: flex; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px solid #eee; font-size: 14px; user-select: text; }
+  #results li .n { color: var(--muted); font-size: 12px; min-width: 26px; }
+  #results li .t { color: var(--muted); font-size: 11px; margin-left: auto; }
+  #results li .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .empty { color: var(--muted); text-align: center; padding: 30px 10px; font-size: 14px; }
+
+  #customize { flex: 1; overflow: auto; padding: 4px 14px 14px; }
+  #customize { padding: 10px 10px 14px; }
+  .secTools { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 8px; }
+  .secTools .btn { padding: 4px 9px; font-size: 12px; }
+  .sec { border: 1px solid var(--border); border-radius: 9px; margin-bottom: 8px; background: #fff; overflow: hidden; }
+  .sec summary { list-style: none; cursor: pointer; padding: 11px 12px; font-size: 17px; font-weight: 700; color: #1f2a3c; display: flex; align-items: center; gap: 8px; }
+  .sec summary::-webkit-details-marker { display: none; }
+  .sec summary::after { content: '▸'; margin-left: auto; color: var(--muted); transition: transform .2s; }
+  .sec[open] summary::after { transform: rotate(90deg); }
+  .sec summary:hover { background: #f3f5f9; }
+  .sec[open] summary { border-bottom: 1px solid var(--border); background: #f3f6fc; color: var(--accent); }
+  .sec .ico { font-size: 18px; width: 24px; text-align: center; }
+  .secBody { padding: 8px 12px 10px; }
+  .optrow { display: flex; align-items: center; gap: 8px; padding: 9px 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .optrow input { width: 17px; height: 17px; cursor: pointer; }
+  #removedNote { color: var(--muted); font-size: 13px; margin-right: auto; align-self: center; }
+  #sWinnerMode { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font: 14px "Segoe UI", sans-serif; background: #fff; cursor: pointer; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 14px; }
+  .row label { flex: 1; }
+  .row input[type=range] { width: 130px; }
+  .row input[type=text], .row input[type=number] { width: 150px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; font-family: inherit; user-select: text; }
+  input[type=color] { width: 34px; height: 28px; border: 1px solid var(--border); border-radius: 5px; padding: 1px; background: #fff; cursor: pointer; }
+  #palette { display: flex; flex-wrap: wrap; gap: 6px; }
+  .swatch { position: relative; }
+  .swatch input { width: 38px; height: 34px; }
+  .swatch .x { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; border-radius: 50%; border: 0; background: #444; color: #fff; font-size: 10px; line-height: 16px; padding: 0; cursor: pointer; display: none; }
+  .swatch:hover .x { display: block; }
+  #presets { display: flex; flex-direction: column; gap: 5px; }
+  .preset { display: flex; height: 22px; border-radius: 5px; overflow: hidden; cursor: pointer; border: 1px solid var(--border); }
+  .preset span { flex: 1; }
+  .preset:hover { outline: 2px solid var(--accent); }
+  .imgbox { display: flex; align-items: center; gap: 8px; margin: 7px 0; }
+  .imgbox .thumb { width: 52px; height: 52px; border-radius: 50%; background: #ddd center / cover; border: 1px solid var(--border); flex: none; }
+  .imgbox .thumb.sq { border-radius: 6px; }
+
+  /* Botón mostrar panel */
+  #showPanel { position: absolute; top: 16px; right: 16px; display: none; }
+  body.panel-hidden #showPanel { display: inline-flex; }
+
+  /* Modal ganador */
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 20; }
+  #overlay.show { display: flex; }
+  #modal { background: #fff; border-radius: 14px; min-width: 380px; max-width: 80vw; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.5); animation: pop .3s ease-out; }
+  @keyframes pop { from { transform: scale(.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #modalHead { padding: 14px 20px; color: #fff; font-size: 17px; font-weight: 600; }
+  #modalBody { padding: 28px 24px; font-size: 40px; font-weight: 700; text-align: center; word-break: break-word; }
+  #modalFoot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid #eee; }
+  #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 40; }
+  #toast.show { opacity: .92; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="wheelWrap"><canvas id="wheel"></canvas></div>
+</div>
+<div id="title"></div>
+<div id="hint">Clic en la ruleta o Ctrl+Enter para girar · F11 pantalla completa</div>
+
+<button class="btn" id="showPanel" title="Mostrar panel">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Mostrar panel
+</button>
+
+<aside id="panel">
+  <div class="card" id="tabs">
+    <button class="tab active" data-view="vEntries" title="Opciones">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Opciones
+    </button>
+    <button class="tab" data-view="vResults" title="Resultados">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg> Resultados <span class="badge" id="resBadge"></span>
+    </button>
+    <button class="tab" data-view="vCustom" title="Personalizar">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#f44336"/><path d="M12 2a10 10 0 0 1 8.66 5L12 12z" fill="#ffeb3b"/><path d="M20.66 7A10 10 0 0 1 20.66 17L12 12z" fill="#4caf50"/><path d="M20.66 17A10 10 0 0 1 12 22V12z" fill="#2196f3"/><path d="M12 22a10 10 0 0 1-8.66-5L12 12z" fill="#9c27b0"/></svg> Personalizar
+    </button>
+    <button class="tab" id="hidePanel" title="Ocultar panel" style="flex:0 0 40px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M1 1l22 22"/></svg>
+    </button>
+  </div>
+
+  <!-- Opciones -->
+  <section class="view active" id="vEntries">
+    <div class="card toolbar">
+      <button class="btn primary" id="spinBtn" title="Girar (Ctrl+Enter)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg> Girar
+      </button>
+      <button class="btn" id="shuffleBtn" title="Mezclar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+      </button>
+      <button class="btn" id="sortBtn" title="Ordenar A-Z">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h11M3 12h7M3 18h4M18 4v16M15 17l3 3 3-3"/></svg>
+      </button>
+      <button class="btn" id="dedupeBtn" title="Quitar repetidos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a2 2 0 0 1 2-2h11"/></svg>
+      </button>
+      <span class="spacer"></span>
+      <button class="btn" id="importBtn" title="Cargar desde archivo (.txt / .csv)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      </button>
+      <button class="btn" id="exportBtn" title="Guardar lista en archivo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+      </button>
+      <button class="btn danger" id="clearBtn" title="Vaciar lista">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+      </button>
+    </div>
+    <textarea id="entries" spellcheck="false" placeholder="Escribí o pegá una opción por línea..."></textarea>
+    <span class="counter" id="counter">Entradas: 0</span>
+  </section>
+
+  <!-- Resultados -->
+  <section class="view card" id="vResults">
+    <div class="toolbar">
+      <button class="btn" id="copyRes">Copiar</button>
+      <button class="btn" id="exportRes">Guardar</button>
+      <span class="spacer"></span>
+      <button class="btn danger" id="clearRes">Borrar historial</button>
+    </div>
+    <ul id="results"></ul>
+  </section>
+
+  <!-- Personalizar -->
+  <section class="view card" id="vCustom">
+    <div id="customize">
+      <div class="secTools"><button class="btn" id="openAll">Abrir todo</button><button class="btn" id="closeAll">Cerrar todo</button></div>
+
+      <details class="sec" open><summary><span class="ico">🏷️</span> Título</summary><div class="secBody">
+      <div class="row"><input type="text" id="sTitle" placeholder="Sin título" style="width:100%"></div>
+      </div></details>
+
+      <details class="sec" open><summary><span class="ico">🎨</span> Colores de los gajos</summary><div class="secBody">
+      <div id="palette"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="addColor">+ Agregar color</button>
+        <button class="btn" id="randColors">Aleatorios</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin:8px 0 5px">Paletas predefinidas</div>
+      <div id="presets"></div>
+      </div></details>
+
+      <details class="sec"><summary><span class="ico">🔤</span> Texto de los gajos</summary><div class="secBody">
+      <div class="row"><label>Mostrar texto en los gajos</label><input type="checkbox" id="sShowText"></div>
+      <div class="row"><label>Color automático (blanco/negro)</label><input type="checkbox" id="sAutoText"></div>
+      <div class="row"><label>Color de texto</label><input type="color" id="sTextColor"></div>
+      <div class="row"><label>Tamaño de texto</label><input type="range" id="sTextSize" min="0.5" max="1.6" step="0.05"></div>
+      <div class="row"><label>Bordes entre gajos</label><input type="color" id="sLineColor"><input type="checkbox" id="sLines"></div>
+      </div></details>
+
+      <details class="sec"><summary><span class="ico">🎯</span> Centro de la ruleta</summary><div class="secBody">
+      <div class="imgbox">
+        <div class="thumb" id="centerThumb"></div>
+        <button class="btn" id="centerImgBtn">Elegir imagen</button>
+        <button class="btn danger" id="centerImgDel">Quitar</button>
+      </div>
+      <div class="row"><label>Texto del centro</label><input type="text" id="sCenterText" placeholder="(opcional)"></div>
+      <div class="row"><label>Color de fondo del centro</label><input type="color" id="sCenterColor"></div>
+      <div class="row"><label>Color de texto del centro</label><input type="color" id="sCenterTextColor"></div>
+      <div class="row"><label>Tamaño del centro</label><input type="range" id="sCenterSize" min="0" max="0.6" step="0.01"></div>
+      <div class="row"><label>El centro gira con la ruleta</label><input type="checkbox" id="sCenterRotate"></div>
+      </div></details>
+
+      <details class="sec"><summary><span class="ico">🎡</span> Giro y efectos</summary><div class="secBody">
+      <div class="row" style="flex-direction:column;align-items:stretch;gap:5px">
+        <label for="sWinnerMode" style="font-weight:600">¿Qué hacer con el ganador?</label>
+        <select id="sWinnerMode">
+          <option value="ask">Preguntar si lo elimino</option>
+          <option value="remove">Eliminarlo de la ruleta</option>
+          <option value="keep">No eliminarlo</option>
+        </select>
+        <span id="winnerModeHelp" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div class="row"><label>Color del puntero</label><input type="color" id="sPointerColor"></div>
+      <div class="row"><label>Color del borde exterior</label><input type="color" id="sRimColor"></div>
+      <div class="row"><label>Duración del giro (seg)</label><input type="number" id="sDuration" min="1" max="60" step="1" style="width:70px"></div>
+      <div class="row"><label>Sonido</label><input type="checkbox" id="sSound"></div>
+      <div class="row"><label>Confeti al ganar</label><input type="checkbox" id="sConfetti"></div>
+      </div></details>
+
+      <details class="sec"><summary><span class="ico">🖼️</span> Fondo de la app</summary><div class="secBody">
+      <div class="row"><label>Color de fondo</label><input type="color" id="sBgColor"></div>
+      <div class="imgbox">
+        <div class="thumb sq" id="bgThumb"></div>
+        <button class="btn" id="bgImgBtn">Imagen de fondo</button>
+        <button class="btn danger" id="bgImgDel">Quitar</button>
+      </div>
+      </div></details>
+
+      <details class="sec"><summary><span class="ico">💾</span> Guardar configuración</summary><div class="secBody">
+      <div class="row">
+        <button class="btn" id="exportCfg">Exportar</button>
+        <button class="btn" id="importCfg">Importar</button>
+        <button class="btn danger" id="resetCfg">Restablecer</button>
+      </div>
+      </div></details>
+    </div>
+  </section>
+</aside>
+
+<div id="overlay">
+  <div id="modal">
+    <div id="modalHead">¡Tenemos un ganador!</div>
+    <div id="modalBody"></div>
+    <div id="modalFoot">
+      <span id="removedNote"></span>
+      <button class="btn" id="keepWinner">No eliminar</button>
+      <button class="btn primary" id="removeWinner" style="background:#c62828">Eliminar</button>
+      <button class="btn primary" id="closeModal">Cerrar</button>
+    </div>
+  </div>
+</div>
+<canvas id="confetti"></canvas>
+<div id="toast"></div>
+
+<input type="file" id="fileTxt" accept=".txt,.csv,text/plain" hidden>
+<input type="file" id="fileImg" accept="image/*" hidden>
+<input type="file" id="fileCfg" accept=".json,application/json" hidden>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const TAU = Math.PI * 2;
+
+const PRESETS = [
+  ['#e53935', '#43a047', '#1e88e5', '#fdd835'],
+  ['#3369e8', '#d50f25', '#eeb211', '#009925'],
+  ['#ff6b6b', '#feca57', '#48dbfb', '#1dd1a1', '#5f27cd', '#ff9ff3'],
+  ['#264653', '#2a9d8f', '#e9c46a', '#f4a261', '#e76f51'],
+  ['#f72585', '#7209b7', '#3a0ca3', '#4361ee', '#4cc9f0'],
+  ['#ffadad', '#ffd6a5', '#fdffb6', '#caffbf', '#9bf6ff', '#a0c4ff', '#bdb2ff', '#ffc6ff'],
+  ['#c0392b', '#ffffff', '#27ae60', '#f1c40f'],
+  ['#111111', '#e0e0e0'],
+];
+
+const DEFAULTS = {
+  title: '',
+  colors: PRESETS[0].slice(),
+  showText: true, autoText: true, textColor: '#ffffff', textSize: 1,
+  lines: true, lineColor: '#ffffff',
+  centerImage: null, centerText: '', centerColor: '#ffffff', centerTextColor: '#222222',
+  centerSize: 0.22, centerRotate: true,
+  pointerColor: '#e67e22', rimColor: '#ffffff',
+  duration: 7, sound: true, confetti: true,
+  winnerMode: 'ask',   // 'ask' = preguntar, 'remove' = eliminar siempre, 'keep' = no eliminar nunca
+  bgColor: '#1d1f2b', bgImage: null,
+};
+
+// ---------- Persistencia ----------
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
+}
+function save(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+  catch { toast('No se pudo guardar (¿imagen muy grande?)'); return false; }
+}
+const savedSettings = load('ruleta.settings', {});
+let S = Object.assign({}, DEFAULTS, savedSettings);
+// Versión anterior: casilla "sacar al ganador"
+if (!savedSettings.winnerMode && savedSettings.autoRemove) S.winnerMode = 'remove';
+delete S.autoRemove;
+let results = load('ruleta.results', []);
+const entriesEl = $('entries');
+entriesEl.value = load('ruleta.entries', 'Opción 1\nOpción 2\nOpción 3\nOpción 4\nOpción 5\nOpción 6');
+
+const saveSettings = () => save('ruleta.settings', S);
+
+// ---------- Estado de la ruleta ----------
+let items = [];
+let rotation = load('ruleta.rotation', 0);
+let spinning = false;
+let wheelCache = null;   // canvas offscreen con los gajos ya dibujados
+let centerImg = null;
+const canvas = $('wheel');
+const ctx = canvas.getContext('2d');
+let size = 600, dpr = 1;
+
+function parseItems() {
+  items = entriesEl.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  $('counter').textContent = 'Entradas: ' + items.length;
+}
+
+function luminance(hex) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+function sliceColor(i, n) {
+  const c = S.colors.length ? S.colors : ['#888888'];
+  let idx = i % c.length;
+  // Evita que el último gajo tenga el mismo color que el primero
+  if (n > 1 && i === n - 1 && c.length > 2 && idx === 0) idx = 1;
+  return c[idx];
+}
+
+function fitText(g, text, maxW) {
+  if (g.measureText(text).width <= maxW) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (g.measureText(text.slice(0, m) + '…').width <= maxW) lo = m; else hi = m - 1; }
+  return lo ? text.slice(0, lo) + '…' : '';
+}
+
+function resize() {
+  const panelW = document.body.classList.contains('panel-hidden') ? 0 : 380;
+  const avail = Math.min(window.innerWidth - panelW - 60, window.innerHeight - 90);
+  size = Math.max(250, Math.floor(avail));
+  dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.height = Math.round(size * dpr);
+  canvas.style.width = canvas.style.height = size + 'px';
+  renderWheel();
+}
+
+// Dibuja los gajos una sola vez en un canvas aparte (rápido aunque haya miles de opciones)
+function renderWheel() {
+  const px = canvas.width;
+  const off = wheelCache || document.createElement('canvas');
+  off.width = off.height = px;
+  const g = off.getContext('2d');
+  g.clearRect(0, 0, px, px);
+  const c = px / 2, pointerSpace = px * 0.045;
+  const R = c - pointerSpace - px * 0.012;
+  const n = items.length;
+  g.save(); g.translate(c, c);
+
+  if (!n) {
+    g.beginPath(); g.arc(0, 0, R, 0, TAU); g.fillStyle = '#9aa0aa'; g.fill();
+    g.fillStyle = '#fff'; g.font = `600 ${R * 0.08}px Segoe UI`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('Agregá opciones en el panel', 0, R * 0.6);
+  } else {
+    const a = TAU / n;
+    for (let i = 0; i < n; i++) {
+      g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, R, i * a, (i + 1) * a); g.closePath();
+      g.fillStyle = sliceColor(i, n); g.fill();
+    }
+    if (S.lines && n > 1 && a * R > 6 * dpr) {   // con muchísimas opciones las líneas taparían los colores
+      g.strokeStyle = S.lineColor; g.lineWidth = Math.max(0.5, Math.min(2.5 * dpr, (a * R) / 20));
+      g.beginPath();
+      for (let i = 0; i < n; i++) { g.moveTo(0, 0); g.lineTo(Math.cos(i * a) * R, Math.sin(i * a) * R); }
+      g.stroke();
+    }
+    if (S.showText) {
+      const arc = a * R;                       // ancho del gajo en el borde
+      let fs = Math.min(R * 0.085, arc * 0.62) * S.textSize;
+      if (n === 1) fs = R * 0.09 * S.textSize;
+      if (fs >= 4) {
+        const inner = R * Math.max(S.centerSize, 0.05) + R * 0.04;
+        const maxW = R - inner - R * 0.05;
+        g.font = `600 ${fs}px Segoe UI, sans-serif`;
+        g.textAlign = 'right'; g.textBaseline = 'middle';
+        for (let i = 0; i < n; i++) {
+          g.save(); g.rotate((i + 0.5) * a);
+          g.fillStyle = S.autoText ? (luminance(sliceColor(i, n)) > 0.45 ? '#111' : '#fff') : S.textColor;
+          g.fillText(fitText(g, items[i], maxW), R - R * 0.05, 0);
+          g.restore();
+        }
+      }
+    }
+  }
+  g.restore();
+  wheelCache = off;
+  draw();
+}
+
+function draw() {
+  const px = canvas.width, c = px / 2;
+  const pointerSpace = px * 0.045;
+  const R = c - pointerSpace - px * 0.012;
+  ctx.clearRect(0, 0, px, px);
+
+  // Sombra + borde exterior
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = px * 0.03;
+  ctx.beginPath(); ctx.arc(c, c, R + px * 0.008, 0, TAU); ctx.fillStyle = S.rimColor; ctx.fill();
+  ctx.restore();
+
+  ctx.save(); ctx.translate(c, c); ctx.rotate(rotation);
+  ctx.drawImage(wheelCache, -c, -c);
+  ctx.restore();
+
+  // Centro
+  const cr = R * S.centerSize;
+  if (cr > 2) {
+    ctx.save(); ctx.translate(c, c);
+    if (S.centerRotate) ctx.rotate(rotation);
+    ctx.beginPath(); ctx.arc(0, 0, cr, 0, TAU);
+    ctx.fillStyle = S.centerColor; ctx.fill();
+    ctx.save(); ctx.clip();
+    if (centerImg) {
+      const s = Math.max((cr * 2) / centerImg.width, (cr * 2) / centerImg.height);
+      const w = centerImg.width * s, h = centerImg.height * s;
+      ctx.drawImage(centerImg, -w / 2, -h / 2, w, h);
+    }
+    if (S.centerText) {
+      let fs = cr * 0.45;
+      ctx.font = `700 ${fs}px Segoe UI, sans-serif`;
+      while (fs > 6 && ctx.measureText(S.centerText).width > cr * 1.75) { fs -= 1; ctx.font = `700 ${fs}px Segoe UI, sans-serif`; }
+      ctx.fillStyle = S.centerTextColor; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (centerImg) { ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 6; }
+      ctx.fillText(S.centerText, 0, 0);
+    }
+    ctx.restore();
+    ctx.lineWidth = Math.max(2, px * 0.006); ctx.strokeStyle = S.rimColor; ctx.stroke();
+    ctx.restore();
+  }
+
+  // Puntero (a la derecha, apuntando hacia el centro)
+  const tipX = c + R - px * 0.02, baseX = px - px * 0.008, half = px * 0.032;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = px * 0.01;
+  ctx.beginPath();
+  ctx.moveTo(tipX, c);
+  ctx.lineTo(baseX, c - half);
+  ctx.quadraticCurveTo(baseX - px * 0.012, c, baseX, c + half);
+  ctx.closePath();
+  ctx.fillStyle = S.pointerColor; ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.lineWidth = Math.max(1.5, px * 0.003); ctx.strokeStyle = '#fff'; ctx.stroke();
+  ctx.restore();
+}
+
+function indexAtPointer(rot, n) {
+  const a = TAU / n;
+  const ang = ((-rot) % TAU + TAU) % TAU;   // ángulo de la ruleta que queda bajo el puntero (0 rad = derecha)
+  return Math.floor(ang / a) % n;
+}
+
+// ---------- Sonido ----------
+let audio = null;
+function tick() {
+  if (!S.sound) return;
+  try {
+    audio = audio || new AudioContext();
+    const o = audio.createOscillator(), gn = audio.createGain();
+    o.type = 'triangle'; o.frequency.value = 900 + Math.random() * 120;
+    gn.gain.setValueAtTime(0.12, audio.currentTime);
+    gn.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.05);
+    o.connect(gn).connect(audio.destination); o.start(); o.stop(audio.currentTime + 0.06);
+  } catch {}
+}
+function fanfare() {
+  if (!S.sound) return;
+  try {
+    audio = audio || new AudioContext();
+    [523, 659, 784, 1047].forEach((f, i) => {
+      const o = audio.createOscillator(), gn = audio.createGain(), t = audio.currentTime + i * 0.11;
+      o.type = 'square'; o.frequency.value = f;
+      gn.gain.setValueAtTime(0.0001, t); gn.gain.exponentialRampToValueAtTime(0.08, t + 0.02);
+      gn.gain.exponentialRampToValueAtTime(0.001, t + (i === 3 ? 0.5 : 0.15));
+      o.connect(gn).connect(audio.destination); o.start(t); o.stop(t + 0.55);
+    });
+  } catch {}
+}
+
+// ---------- Giro ----------
+function spin() {
+  if (spinning) return;
+  parseItems();
+  if (!items.length) { toast('Agregá al menos una opción'); return; }
+  closeModal();
+  spinning = true;
+  const n = items.length, a = TAU / n;
+  const winner = Math.floor(Math.random() * n);
+  const u = 0.1 + Math.random() * 0.8;               // posición dentro del gajo
+  const targetMod = ((-(winner + u) * a) % TAU + TAU) % TAU;
+  const curMod = ((rotation % TAU) + TAU) % TAU;
+  let delta = targetMod - curMod; if (delta < 0) delta += TAU;
+  const dur = Math.max(1, +S.duration || 7) * 1000;
+  const turns = Math.round(dur / 1000 * 1.6) + 3;
+  const start = rotation, total = delta + turns * TAU;
+  const t0 = performance.now();
+  let lastIdx = indexAtPointer(rotation, n), lastTick = 0;
+  const ease = t => 1 - Math.pow(1 - t, 4);
+
+  function frame(now) {
+    const t = Math.min(1, (now - t0) / dur);
+    rotation = start + total * ease(t);
+    draw();
+    const idx = indexAtPointer(rotation, n);
+    if (idx !== lastIdx && now - lastTick > 45) { tick(); lastTick = now; }
+    lastIdx = idx;
+    if (t < 1) requestAnimationFrame(frame);
+    else {
+      rotation = ((rotation % TAU) + TAU) % TAU;
+      save('ruleta.rotation', rotation);
+      spinning = false;
+      finish(indexAtPointer(rotation, n));
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+let lastWinner = null;
+function finish(i) {
+  const name = items[i], color = sliceColor(i, items.length);
+  lastWinner = { index: i, name };
+  results.unshift({ name, color, at: Date.now() });
+  save('ruleta.results', results);
+  renderResults();
+  fanfare();
+  if (S.confetti) confetti();
+  const mode = S.winnerMode;
+  if (mode === 'remove') removeLine(i);
+  $('modalHead').style.background = color;
+  $('modalHead').style.color = luminance(color) > 0.45 ? '#111' : '#fff';
+  $('modalBody').textContent = name;
+  const ask = mode === 'ask';
+  $('removeWinner').style.display = ask ? '' : 'none';
+  $('keepWinner').style.display = ask ? '' : 'none';
+  $('closeModal').style.display = ask ? 'none' : '';
+  $('removedNote').textContent = mode === 'remove' ? 'Se eliminó de la ruleta' : mode === 'keep' ? 'Sigue en la ruleta' : '';
+  $('overlay').classList.add('show');
+  (ask ? $('keepWinner') : $('closeModal')).focus();
+}
+function closeModal() { $('overlay').classList.remove('show'); }
+
+// Quita la línea N° i (contando solo líneas no vacías)
+function removeLine(i) {
+  const lines = entriesEl.value.split(/\r?\n/);
+  let k = -1;
+  for (let j = 0; j < lines.length; j++) {
+    if (lines[j].trim()) { k++; if (k === i) { lines.splice(j, 1); break; } }
+  }
+  setEntries(lines.join('\n'));
+}
+
+function setEntries(text) {
+  entriesEl.value = text;
+  onEntriesChange();
+}
+function onEntriesChange() {
+  parseItems();
+  save('ruleta.entries', entriesEl.value);
+  renderWheel();
+}
+
+// ---------- Confeti ----------
+function confetti() {
+  const cv = $('confetti'), g = cv.getContext('2d');
+  cv.width = innerWidth; cv.height = innerHeight;
+  const cols = S.colors.length ? S.colors : ['#f00', '#0f0', '#00f'];
+  const parts = Array.from({ length: 180 }, () => ({
+    x: innerWidth / 2 + (Math.random() - .5) * 200, y: innerHeight / 2,
+    vx: (Math.random() - .5) * 16, vy: -Math.random() * 16 - 4,
+    r: Math.random() * TAU, vr: (Math.random() - .5) * .3,
+    w: 6 + Math.random() * 6, h: 4 + Math.random() * 6, c: cols[Math.floor(Math.random() * cols.length)],
+  }));
+  const t0 = performance.now();
+  (function f(now) {
+    g.clearRect(0, 0, cv.width, cv.height);
+    const el = now - t0;
+    for (const p of parts) {
+      p.vy += .35; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.globalAlpha = Math.max(0, 1 - el / 3500);
+      g.fillStyle = p.c; g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); g.restore();
+    }
+    if (el < 3500) requestAnimationFrame(f); else g.clearRect(0, 0, cv.width, cv.height);
+  })(t0);
+}
+
+// ---------- Resultados ----------
+function renderResults() {
+  const ul = $('results');
+  $('resBadge').textContent = results.length || '';
+  if (!results.length) { ul.innerHTML = '<div class="empty">Todavía no hay resultados.</div>'; return; }
+  ul.innerHTML = '';
+  results.forEach((r, i) => {
+    const li = document.createElement('li');
+    const d = new Date(r.at);
+    li.innerHTML = `<span class="n">${results.length - i}.</span><span class="dot"></span><span class="name"></span><span class="t"></span>`;
+    li.querySelector('.dot').style.background = r.color;
+    li.querySelector('.name').textContent = r.name;
+    li.querySelector('.t').textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    ul.appendChild(li);
+  });
+}
+
+// ---------- Utilidades ----------
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function download(name, text, type = 'text/plain') {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: type + ';charset=utf-8' }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function pickFile(input) {
+  return new Promise(res => { input.value = ''; input.onchange = () => res(input.files[0] || null); input.click(); });
+}
+// Achica la imagen para que entre en el almacenamiento local
+function loadImageFile(file, maxSide, mime) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(img.src);
+      res(cv.toDataURL(mime, 0.85));
+    };
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+// ---------- Personalización ----------
+function applyVisual() {
+  document.body.style.backgroundColor = S.bgColor;
+  document.body.style.backgroundImage = S.bgImage ? `url("${S.bgImage}")` : 'none';
+  $('title').textContent = S.title;
+  $('centerThumb').style.backgroundImage = S.centerImage ? `url("${S.centerImage}")` : 'none';
+  $('centerThumb').style.backgroundColor = S.centerColor;
+  $('bgThumb').style.backgroundImage = S.bgImage ? `url("${S.bgImage}")` : 'none';
+  $('bgThumb').style.backgroundColor = S.bgColor;
+  $('sTextColor').disabled = S.autoText;
+  $('winnerModeHelp').textContent = {
+    ask: 'El cartel muestra "Eliminar" y "No eliminar" para que elijas cada vez.',
+    remove: 'El ganador se borra solo y no puede volver a salir. El cartel solo tiene "Cerrar".',
+    keep: 'El ganador queda en la ruleta y puede volver a salir. El cartel solo tiene "Cerrar".',
+  }[S.winnerMode] || '';
+}
+function loadCenterImg() {
+  if (!S.centerImage) { centerImg = null; draw(); return; }
+  const img = new Image();
+  img.onload = () => { centerImg = img; draw(); };
+  img.src = S.centerImage;
+}
+
+function renderPalette() {
+  const box = $('palette'); box.innerHTML = '';
+  S.colors.forEach((c, i) => {
+    const w = document.createElement('div'); w.className = 'swatch';
+    const inp = document.createElement('input'); inp.type = 'color'; inp.value = c;
+    inp.oninput = () => { S.colors[i] = inp.value; saveSettings(); renderWheel(); };
+    const x = document.createElement('button'); x.className = 'x'; x.textContent = '✕'; x.title = 'Quitar color';
+    x.onclick = () => { if (S.colors.length <= 1) return toast('Tiene que quedar al menos un color'); S.colors.splice(i, 1); saveSettings(); renderPalette(); renderWheel(); };
+    w.append(inp, x); box.appendChild(w);
+  });
+}
+function renderPresets() {
+  const box = $('presets');
+  PRESETS.forEach(p => {
+    const d = document.createElement('div'); d.className = 'preset';
+    p.forEach(c => { const s = document.createElement('span'); s.style.background = c; d.appendChild(s); });
+    d.onclick = () => { S.colors = p.slice(); saveSettings(); renderPalette(); renderWheel(); };
+    box.appendChild(d);
+  });
+}
+
+// Vincula cada control con su ajuste
+const BINDINGS = {
+  sTitle: ['title', 'text'], sShowText: ['showText', 'check'], sAutoText: ['autoText', 'check'],
+  sTextColor: ['textColor', 'text'], sTextSize: ['textSize', 'num'], sLines: ['lines', 'check'], sLineColor: ['lineColor', 'text'],
+  sCenterText: ['centerText', 'text'], sCenterColor: ['centerColor', 'text'], sCenterTextColor: ['centerTextColor', 'text'],
+  sCenterSize: ['centerSize', 'num'], sCenterRotate: ['centerRotate', 'check'],
+  sPointerColor: ['pointerColor', 'text'], sRimColor: ['rimColor', 'text'], sDuration: ['duration', 'num'],
+  sSound: ['sound', 'check'], sConfetti: ['confetti', 'check'], sWinnerMode: ['winnerMode', 'text'], sBgColor: ['bgColor', 'text'],
+};
+const WHEEL_KEYS = new Set(['showText', 'autoText', 'textColor', 'textSize', 'lines', 'lineColor', 'centerSize']);
+function syncControls() {
+  for (const [id, [key, kind]] of Object.entries(BINDINGS)) {
+    const el = $(id);
+    if (kind === 'check') el.checked = !!S[key]; else el.value = S[key];
+  }
+}
+for (const [id, [key, kind]] of Object.entries(BINDINGS)) {
+  const el = $(id);
+  el.addEventListener('input', () => {
+    S[key] = kind === 'check' ? el.checked : kind === 'num' ? parseFloat(el.value) : el.value;
+    saveSettings(); applyVisual();
+    if (WHEEL_KEYS.has(key)) renderWheel(); else draw();
+  });
+}
+
+// ---------- Eventos ----------
+document.querySelectorAll('.tab[data-view]').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab[data-view]').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === t.dataset.view));
+});
+$('hidePanel').onclick = () => { document.body.classList.add('panel-hidden'); setTimeout(resize, 260); };
+$('showPanel').onclick = () => { document.body.classList.remove('panel-hidden'); setTimeout(resize, 260); };
+
+let entTimer;
+entriesEl.addEventListener('input', () => { parseItems(); clearTimeout(entTimer); entTimer = setTimeout(onEntriesChange, 200); });
+
+canvas.addEventListener('click', spin);
+$('spinBtn').onclick = spin;
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); spin(); }
+  else if (e.key === 'Escape') closeModal();
+  else if ((e.key === ' ' || e.key === 'Enter') && document.activeElement === document.body) { e.preventDefault(); spin(); }
+});
+
+$('shuffleBtn').onclick = () => {
+  const a = entriesEl.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  setEntries(a.join('\n'));
+};
+$('sortBtn').onclick = () => {
+  const a = entriesEl.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  setEntries(a.sort((x, y) => x.localeCompare(y, 'es', { numeric: true, sensitivity: 'base' })).join('\n'));
+};
+$('dedupeBtn').onclick = () => {
+  const a = entriesEl.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const seen = new Set(), out = a.filter(x => { const k = x.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  setEntries(out.join('\n'));
+  toast(`Se quitaron ${a.length - out.length} repetidos`);
+};
+$('clearBtn').onclick = () => { if (confirm('¿Vaciar toda la lista?')) setEntries(''); };
+$('importBtn').onclick = async () => {
+  const f = await pickFile($('fileTxt')); if (!f) return;
+  let text = await f.text();
+  // CSV: toma la primera columna
+  if (/\.csv$/i.test(f.name)) text = text.split(/\r?\n/).map(l => l.split(/[;,]/)[0].replace(/^"|"$/g, '')).join('\n');
+  const replace = !entriesEl.value.trim() || confirm('¿Reemplazar la lista actual?\n\nAceptar = reemplazar · Cancelar = agregar al final');
+  setEntries(replace ? text : entriesEl.value.replace(/\s*$/, '\n') + text);
+  toast(`Cargadas ${text.split(/\r?\n/).filter(s => s.trim()).length} opciones`);
+};
+$('exportBtn').onclick = () => download('ruleta-opciones.txt', items.join('\r\n'));
+
+$('closeModal').onclick = closeModal;
+$('overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
+$('removeWinner').onclick = () => {
+  if (lastWinner && items[lastWinner.index] === lastWinner.name) removeLine(lastWinner.index);
+  lastWinner = null; closeModal();
+};
+$('keepWinner').onclick = () => { lastWinner = null; closeModal(); };
+
+$('copyRes').onclick = async () => {
+  try { await navigator.clipboard.writeText(results.map(r => r.name).join('\n')); toast('Copiado'); } catch { toast('No se pudo copiar'); }
+};
+$('exportRes').onclick = () => download('ruleta-resultados.txt',
+  results.map((r, i) => `${results.length - i}. ${r.name}\t${new Date(r.at).toLocaleString()}`).join('\r\n'));
+$('clearRes').onclick = () => { if (confirm('¿Borrar el historial de resultados?')) { results = []; save('ruleta.results', results); renderResults(); } };
+
+$('addColor').onclick = () => { S.colors.push('#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0')); saveSettings(); renderPalette(); renderWheel(); };
+$('randColors').onclick = () => {
+  const n = S.colors.length || 6, h0 = Math.random() * 360;
+  S.colors = Array.from({ length: n }, (_, i) => hslHex((h0 + i * 360 / n) % 360, 70, 52));
+  saveSettings(); renderPalette(); renderWheel();
+};
+function hslHex(h, s, l) {
+  s /= 100; l /= 100;
+  const f = n => { const k = (n + h / 30) % 12, c = l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1)); return Math.round(c * 255).toString(16).padStart(2, '0'); };
+  return '#' + f(0) + f(8) + f(4);
+}
+
+$('centerImgBtn').onclick = async () => {
+  const f = await pickFile($('fileImg')); if (!f) return;
+  try {
+    const prev = S.centerImage;
+    S.centerImage = await loadImageFile(f, 700, 'image/png');
+    if (!saveSettings()) { S.centerImage = await loadImageFile(f, 400, 'image/jpeg'); if (!saveSettings()) S.centerImage = prev; }
+    if (S.centerSize < 0.08) { S.centerSize = 0.22; syncControls(); saveSettings(); }
+    applyVisual(); loadCenterImg();
+  } catch { toast('No se pudo abrir la imagen'); }
+};
+$('centerImgDel').onclick = () => { S.centerImage = null; saveSettings(); applyVisual(); loadCenterImg(); };
+$('bgImgBtn').onclick = async () => {
+  const f = await pickFile($('fileImg')); if (!f) return;
+  try {
+    const prev = S.bgImage;
+    S.bgImage = await loadImageFile(f, 1920, 'image/jpeg');
+    if (!saveSettings()) { S.bgImage = await loadImageFile(f, 1280, 'image/jpeg'); if (!saveSettings()) S.bgImage = prev; }
+    applyVisual();
+  } catch { toast('No se pudo abrir la imagen'); }
+};
+$('bgImgDel').onclick = () => { S.bgImage = null; saveSettings(); applyVisual(); };
+
+$('exportCfg').onclick = () => download('ruleta-config.json', JSON.stringify({ settings: S, entries: entriesEl.value }, null, 2), 'application/json');
+$('importCfg').onclick = async () => {
+  const f = await pickFile($('fileCfg')); if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    S = Object.assign({}, DEFAULTS, data.settings || data);
+    saveSettings(); syncControls(); renderPalette(); applyVisual(); loadCenterImg();
+    if (typeof data.entries === 'string') setEntries(data.entries); else renderWheel();
+    toast('Configuración importada');
+  } catch { toast('Archivo de configuración inválido'); }
+};
+$('resetCfg').onclick = () => {
+  if (!confirm('¿Restablecer colores, centro y fondo a los valores originales? (La lista no se toca)')) return;
+  S = JSON.parse(JSON.stringify(DEFAULTS));
+  saveSettings(); syncControls(); renderPalette(); applyVisual(); loadCenterImg(); renderWheel();
+};
+
+// Recuerda qué secciones de Personalizar quedaron abiertas
+const secs = [...document.querySelectorAll('#customize .sec')];
+const openSecs = load('ruleta.openSections', null);
+if (openSecs) secs.forEach((d, i) => d.open = !!openSecs[i]);
+secs.forEach(d => d.addEventListener('toggle', () => save('ruleta.openSections', secs.map(x => x.open))));
+$('openAll').onclick = () => secs.forEach(d => d.open = true);
+$('closeAll').onclick = () => secs.forEach(d => d.open = false);
+
+window.addEventListener('resize', () => { clearTimeout(window._rz); window._rz = setTimeout(resize, 80); });
+
+// ---------- Inicio ----------
+parseItems();
+syncControls();
+renderPalette();
+renderPresets();
+renderResults();
+applyVisual();
+resize();
+loadCenterImg();
+</script>
+</body>
+</html>
